@@ -4,6 +4,8 @@ from tkinter import filedialog, messagebox
 from collections import Counter, defaultdict
 from tkinter.ttk import Progressbar
 from ttkthemes import ThemedTk
+import threading
+import queue
 
 def main():
     # Initialisation de l'interface principale
@@ -22,6 +24,7 @@ def main():
     # Variables globales
     global cancel_search
     cancel_search = False
+    result_queue = queue.Queue()
 
     # Sélection du dossier
     def select_folder():
@@ -40,7 +43,7 @@ def main():
         cancel_search = True
 
     # Recherche des fichiers dupliqués
-    def find_duplicate_files(root_folder, show_top_10, show_all_files):
+    def find_duplicate_files(root_folder, show_top_10, show_all_files, result_queue):
         global cancel_search
         cancel_search = False
         file_dict = defaultdict(list)
@@ -50,7 +53,7 @@ def main():
         # Parcours de l'arborescence
         for dirpath, _, filenames in os.walk(root_folder):
             if cancel_search:
-                messagebox.showinfo("Search Cancelled", "La recherche a été annulée.")
+                result_queue.put("cancelled")
                 return
 
             total_files += len(filenames)
@@ -59,12 +62,12 @@ def main():
 
         for dirpath, _, filenames in os.walk(root_folder):
             if cancel_search:
-                messagebox.showinfo("Search Cancelled", "La recherche a été annulée.")
+                result_queue.put("cancelled")
                 return
 
             for filename in filenames:
                 if cancel_search:
-                    messagebox.showinfo("Search Cancelled", "La recherche a été annulée.")
+                    result_queue.put("cancelled")
                     return
 
                 # Création d'une liste pour chaque nom de fichier trouvé
@@ -82,7 +85,7 @@ def main():
         # Filtrer les fichiers dupliqués
         duplicates = {k: v for k, v in file_dict.items() if len(v) > 1}
         
-        # Affichage des résultats
+        # Préparer les résultats
         if duplicates:
             result = f"Total files scanned: {total_files}\n"
             if show_all_files:
@@ -108,9 +111,9 @@ def main():
                 result += "\nTop 10 folders with the most duplicates:\n"
                 for folder, count in folder_count.most_common(10):
                     result += f"{folder}: {count} duplicates\n"
-            display_result(result)
+            result_queue.put(result)
         else:
-            messagebox.showinfo("No Duplicates", f"Total files scanned: {total_files}\nNo duplicate files were found.")
+            result_queue.put(f"Total files scanned: {total_files}\nNo duplicate files were found.")
 
     # Affichage des résultats
     def display_result(result):
@@ -140,6 +143,17 @@ def main():
 
         result_window.mainloop()
 
+    # Vérifier la file de résultats
+    def check_result_queue():
+        try:
+            result = result_queue.get_nowait()
+            if result == "cancelled":
+                messagebox.showinfo("Search Cancelled", "La recherche a été annulée.")
+            else:
+                display_result(result)
+        except queue.Empty:
+            root.after(100, check_result_queue)
+
     # Lancer la recherche
     def start_search():
         folder = folder_entry.get()
@@ -148,7 +162,9 @@ def main():
             return
         show_top_10 = top_10_var.get()
         show_all_files = all_files_var.get()
-        find_duplicate_files(folder, show_top_10, show_all_files)
+        search_thread = threading.Thread(target=find_duplicate_files, args=(folder, show_top_10, show_all_files, result_queue))
+        search_thread.start()
+        check_result_queue()
 
     # Bouton pour sélectionner le dossier
     select_folder_button = tk.Button(root, text="Select Folder...", command=select_folder)
