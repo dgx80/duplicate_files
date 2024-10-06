@@ -10,3 +10,7 @@
 #   universal: false
 
 -e file:.
+pillow==10.4.0
+    # via ttkthemes
+ttkthemes==3.2.2
+    # via duplicate-files

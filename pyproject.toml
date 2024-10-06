@@ -5,7 +5,9 @@ description = "Add your description here"
 authors = [
     { name = "Jean-Pierre Bouchard", email = "jeanpierre.bouchard80@gmail.com" }
 ]
-dependencies = []
+dependencies = [
+    "ttkthemes>=3.2.2",
+]
 readme = "README.md"
 requires-python = ">= 3.8"
 
