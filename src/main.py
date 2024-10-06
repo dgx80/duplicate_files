@@ -6,12 +6,13 @@ from tkinter.ttk import Progressbar
 from ttkthemes import ThemedTk
 import threading
 import queue
+import hashlib
 
 def main():
     # Initialisation de l'interface principale
     root = ThemedTk(theme="arc")
     root.title("Duplicate File Finder")
-    root.geometry("500x350")
+    root.geometry("500x450")
 
     # Entry pour afficher le chemin du dossier sélectionné
     folder_entry = tk.Entry(root, state='readonly', fg='blue', readonlybackground='lightgrey')
@@ -22,9 +23,10 @@ def main():
     progress.pack(pady=10)
 
     # Variables globales
-    global cancel_search
+    global cancel_search, duplicates
     cancel_search = False
     result_queue = queue.Queue()
+    duplicates = {}
 
     # Sélection du dossier
     def select_folder():
@@ -44,7 +46,7 @@ def main():
 
     # Recherche des fichiers dupliqués
     def find_duplicate_files(root_folder, show_top_10, show_all_files, result_queue):
-        global cancel_search
+        global cancel_search, duplicates
         cancel_search = False
         file_dict = defaultdict(list)
         total_files = 0
@@ -115,6 +117,49 @@ def main():
         else:
             result_queue.put(f"Total files scanned: {total_files}\nNo duplicate files were found.")
 
+    # Comparaison des fichiers dupliqués
+    def compare_duplicates():
+        comparison_results = "Comparison of Duplicate Files:\n"
+        total_files = sum(len(paths) for paths in duplicates.values() if len(paths) > 1)
+        progress["maximum"] = total_files
+        files_compared = 0
+
+        for filename, paths in duplicates.items():
+            if len(paths) > 1:
+                base_path = paths[0]
+                base_size = os.path.getsize(base_path)
+                for path in paths[1:]:
+                    if cancel_search:
+                        messagebox.showinfo("Comparison Cancelled", "La comparaison a été annulée.")
+                        return
+
+                    size = os.path.getsize(path)
+                    if base_size != size:
+                        comparison_results += f"\n{filename} differs by size:\n  {base_path} ({base_size} bytes)\n  {path} ({size} bytes)\n"
+                    elif binary_compare_var.get():
+                        base_hash = calculate_file_hash(base_path)
+                        file_hash = calculate_file_hash(path)
+                        if base_hash != file_hash:
+                            comparison_results += f"\n{filename} differs by hash:\n  {base_path}\n  {path}\n"
+                        else:
+                            comparison_results += f"\n{filename} is identical:\n  {base_path}\n  {path}\n"
+                    else:
+                        comparison_results += f"\n{filename} is identical (size match):\n  {base_path}\n  {path}\n"
+
+                    files_compared += 1
+                    progress["value"] = files_compared
+                    root.update_idletasks()
+
+        display_result(comparison_results)
+
+    # Calculer le hash d'un fichier
+    def calculate_file_hash(filepath):
+        hash_md5 = hashlib.md5()
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
     # Affichage des résultats
     def display_result(result):
         result_window = tk.Toplevel()
@@ -141,7 +186,7 @@ def main():
         close_button = tk.Button(result_window, text="Close", command=result_window.destroy)
         close_button.pack(pady=10)
 
-        result_window.mainloop()
+        result_window.wait_window()
 
     # Vérifier la file de résultats
     def check_result_queue():
@@ -151,6 +196,8 @@ def main():
                 messagebox.showinfo("Search Cancelled", "La recherche a été annulée.")
             else:
                 display_result(result)
+                if duplicates:
+                    compare_button.config(state='normal')
         except queue.Empty:
             root.after(100, check_result_queue)
 
@@ -178,6 +225,10 @@ def main():
     cancel_button = tk.Button(root, text="Cancel", command=cancel)
     cancel_button.pack(pady=5)
 
+    # Bouton pour comparer les fichiers dupliqués
+    compare_button = tk.Button(root, text="Compare Duplicates", command=compare_duplicates, state='disabled')
+    compare_button.pack(pady=5)
+
     # Checkbox pour les options d'affichage
     top_10_var = tk.BooleanVar()
     top_10_check = tk.Checkbutton(root, text="Show Top 10 Folders with Most Duplicates", variable=top_10_var)
@@ -186,6 +237,11 @@ def main():
     all_files_var = tk.BooleanVar()
     all_files_check = tk.Checkbutton(root, text="Show All Duplicate Files", variable=all_files_var)
     all_files_check.pack(pady=5)
+
+    # Checkbox pour la comparaison binaire
+    binary_compare_var = tk.BooleanVar()
+    binary_compare_check = tk.Checkbutton(root, text="Perform Binary Comparison (Hash)", variable=binary_compare_var)
+    binary_compare_check.pack(pady=5)
 
     # Lancer l'application principale
     root.mainloop()
