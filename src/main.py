@@ -12,7 +12,7 @@ def main():
     # Initialisation de l'interface principale
     root = ThemedTk(theme="arc")
     root.title("Duplicate File Finder")
-    root.geometry("500x450")
+    root.geometry("600x600")
 
     # Entry pour afficher le chemin du dossier sélectionné
     folder_entry = tk.Entry(root, state='readonly', fg='blue', readonlybackground='lightgrey')
@@ -37,6 +37,7 @@ def main():
             folder_entry.insert(0, folder_path)
             folder_entry.config(state='readonly')
             start_button.config(state='normal')
+            rename_button.config(state='normal')
             messagebox.showinfo("Folder Selected", "Le dossier a été correctement sélectionné.")
 
     # Annulation de la recherche
@@ -160,6 +161,57 @@ def main():
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
+    # Renommer les fichiers en utilisant un préfixe basé sur le dossier parent
+    def rename_files_with_prefix():
+        folder = folder_entry.get()
+        if not folder:
+            messagebox.showwarning("No Folder Selected", "Please select a folder before renaming files.")
+            return
+
+        for dirpath, _, filenames in os.walk(folder):
+            if any(len(duplicates[filename]) > 1 for filename in filenames if filename in duplicates):
+                # Création de la fenêtre de prévisualisation
+                preview_window = tk.Toplevel()
+                preview_window.title("Rename Preview")
+                preview_frame = tk.Frame(preview_window)
+                preview_frame.pack(expand=True, fill='both')
+
+                scrollbar = tk.Scrollbar(preview_frame)
+                scrollbar.pack(side='right', fill='y')
+
+                text_box = tk.Text(preview_frame, wrap='word', width=100, height=20, yscrollcommand=scrollbar.set)
+                rename_map = []
+
+                folder_name = os.path.basename(dirpath).replace(" ", "_")
+                for filename in filenames:
+                    if filename in duplicates and len(duplicates[filename]) > 1:
+                        new_name = f"{folder_name}_{filename.replace(' ', '_')}"
+                        old_path = os.path.join(dirpath, filename)
+                        new_path = os.path.join(dirpath, new_name)
+                        rename_map.append((old_path, new_path))
+                        text_box.insert('end', f"{filename} -> {new_name}\n")
+
+                text_box.config(state='normal')  # Permet de sélectionner du texte
+                text_box.pack(expand=True, fill='both')
+                scrollbar.config(command=text_box.yview)
+
+                def apply_rename():
+                    for old_path, new_path in rename_map:
+                        os.rename(old_path, new_path)
+                    messagebox.showinfo("Renaming Completed", "Les fichiers ont été renommés avec succès.")
+                    preview_window.destroy()
+
+                def skip_folder():
+                    preview_window.destroy()
+
+                apply_button = tk.Button(preview_window, text="Apply", command=apply_rename)
+                apply_button.pack(side='left', padx=10, pady=10)
+
+                skip_button = tk.Button(preview_window, text="Skip Folder", command=skip_folder)
+                skip_button.pack(side='right', padx=10, pady=10)
+
+                preview_window.wait_window()
+
     # Affichage des résultats
     def display_result(result):
         result_window = tk.Toplevel()
@@ -228,6 +280,10 @@ def main():
     # Bouton pour comparer les fichiers dupliqués
     compare_button = tk.Button(root, text="Compare Duplicates", command=compare_duplicates, state='disabled')
     compare_button.pack(pady=5)
+
+    # Bouton pour renommer les fichiers avec un préfixe basé sur le dossier parent
+    rename_button = tk.Button(root, text="Rename Files with Folder Prefix", command=rename_files_with_prefix, state='disabled')
+    rename_button.pack(pady=5)
 
     # Checkbox pour les options d'affichage
     top_10_var = tk.BooleanVar()
