@@ -9,8 +9,10 @@ def select_folder():
 
 def find_duplicate_files(root_folder):
     file_dict = {}
+    total_files = 0
     # Parcours de l'arborescence
     for dirpath, _, filenames in os.walk(root_folder):
+        total_files += len(filenames)
         for filename in filenames:
             # Création d'une liste pour chaque nom de fichier trouvé
             if filename not in file_dict:
@@ -20,17 +22,16 @@ def find_duplicate_files(root_folder):
     duplicates = {k: v for k, v in file_dict.items() if len(v) > 1}
     
     if duplicates:
-        result = "Duplicate files found:\n"
-        count_files = 0
+        result = f"Total files scanned: {total_files}\n"
+        result += "Duplicate files found:\n"
         for filename, paths in duplicates.items():
             result += f"\n{filename} found in:\n"
             result += "\n".join(paths) + "\n"
-            count_files += 1
-        display_result(result, count_files)
+        display_result(result)
     else:
-        messagebox.showinfo("No Duplicates", "No duplicate files were found.")
+        messagebox.showinfo("No Duplicates", f"Total files scanned: {total_files}\nNo duplicate files were found.")
 
-def display_result(result, count: int):
+def display_result(result):
     result_window = tk.Toplevel()
     result_window.title("Duplicate Files Found")
     text_frame = tk.Frame(result_window)
